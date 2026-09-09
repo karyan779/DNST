@@ -124,11 +124,59 @@ fun_bar 'inst_pct'
 [[ -f "/usr/sbin/ufw" ]] && ufw allow 443/tcp ; ufw allow 80/tcp ; ufw allow 3128/tcp ; ufw allow 8799/tcp ; ufw allow 8080/tcp
 clear
 echo ""
-echo -e "              \033[1;33m[\033[1;31m!\033[1;33m] \033[1;32mFINALIZING \033[1;33m[\033[1;31m!\033[1;33m] \033[0m"
+echo -e "              \033[1;33m[\033[1;31m!\033[1;33m] \033[1;32mFINALIZING \033[1;33m[\033[1;31m!\033[1;33m]\033[0m"
 echo ""
 echo -e "      \033[1;33mCOMPLETING FUNCTIONS AND SETTINGS! \033[0m"
 echo ""
+
+prepare_slowdns() {
+    local slowdns_dir="/etc/SSHPlus/dns"
+    local slowdns_bin="$slowdns_dir/dns-server"
+    local slowdns_url="https://raw.githubusercontent.com/powermx/dnstt/main/dns-server"
+
+    mkdir -p "$slowdns_dir"
+    case "$(uname -m)" in
+        x86_64|amd64) ;;
+        *)
+            echo -e "\033[1;31mUnsupported CPU architecture for the SlowDNS binary: $(uname -m)\033[0m"
+            return 1
+            ;;
+    esac
+
+    echo -e "\033[1;36mPreparing the SlowDNS server binary...\033[0m"
+    if command -v curl >/dev/null 2>&1; then
+        curl -fL --retry 3 --connect-timeout 10 "$slowdns_url" -o "$slowdns_bin"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -O "$slowdns_bin" "$slowdns_url"
+    else
+        echo -e "\033[1;31mNeither curl nor wget is available.\033[0m"
+        return 1
+    fi
+    chmod 755 "$slowdns_bin"
+    if [ ! -s "$slowdns_bin" ]; then
+        echo -e "\033[1;31mSlowDNS binary download failed.\033[0m"
+        return 1
+    fi
+    return 0
+}
+
+if ! prepare_slowdns; then
+    echo -e "\033[1;31mSlowDNS preparation failed. Installation stopped safely.\033[0m"
+    exit 1
+fi
+
 fun_bar "$_Ink/list $_lnk $_Ink $_1nk $key"
+
+patch_slowdns_module() {
+    local slowdns_module="/bin/slow_dns"
+    local replacement_url="https://raw.githubusercontent.com/powermx/dnstt/main/dns-server"
+    if [ -f "$slowdns_module" ]; then
+        sed -i "s#sshplus.net/scripts/slow-dns/dns-server#$replacement_url#g" "$slowdns_module"
+        chmod 755 "$slowdns_module"
+    fi
+}
+
+patch_slowdns_module
 systemverify
 clear
 echo ""
